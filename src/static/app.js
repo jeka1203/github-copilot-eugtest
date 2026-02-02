@@ -121,11 +121,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const result = await response.json();
 
+
       if (response.ok) {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
-        fetchActivities();
+        // Teilnehmerliste direkt aktualisieren
+        // Hole aktuelle Aktivitäten und rendere nur Teilnehmer neu
+        const activitiesResponse = await fetch("/activities");
+        const activities = await activitiesResponse.json();
+        const selectedActivity = activity;
+        if (selectedActivity && activities[selectedActivity]) {
+          renderParticipants(selectedActivity, activities[selectedActivity].participants);
+        } else {
+          renderParticipants(null, []);
+        }
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
