@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const nameSpan = document.createElement('span');
       nameSpan.textContent = email;
       const deleteBtn = document.createElement('button');
-      deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5a.5.5 0 0 1 .5-.5zm2.5.5a.5.5 0 0 0-1 0v5a.5.5 0 0 0 1 0v-5zm2 .5a.5.5 0 0 1 .5-.5.5.5 0 0 1 .5.5v5a.5.5 0 0 1-1 0v-5z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1H14a1 1 0 0 1 1 1zm-3-1a.5.5 0 0 0-.5-.5h-2a.5.5 0 0 0-.5.5H2.5a.5.5 0 0 0-.5.5V4h12V2.5a.5.5 0 0 0-.5-.5H11.5z"/></svg>';
+      deleteBtn.innerHTML = '🗑️';
       deleteBtn.title = 'Teilnehmer entfernen';
       deleteBtn.style.background = 'none';
       deleteBtn.style.border = 'none';
