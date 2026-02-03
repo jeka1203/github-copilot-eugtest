@@ -1,3 +1,6 @@
+pytest
+fastapi
+httpx
 fastapi
 pytest
 httpx

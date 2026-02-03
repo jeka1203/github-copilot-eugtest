@@ -22,12 +22,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
+        // Teilnehmerliste als HTML-Liste mit Delete-Button und ohne Bullet Points
+        let participantsHTML = "";
+        if (details.participants.length > 0) {
+          participantsHTML = `
+            <div class="participants-section">
+              <strong>Participants:</strong>
+              <ul class="participants-list" style="list-style-type: none; padding-left: 0;">
+                ${details.participants
+                  .map(
+                    (participant, idx) =>
+                      `<li style="display: flex; align-items: center;"><span class="participant-email">${participant}</span><button class="delete-btn" data-activity="${name}" data-email="${participant}" title="Remove participant" style="background: none; border: none; cursor: pointer; margin-left: 8px;">🗑️</button></li>`
+                  )
+                  .join("")}
+              </ul>
+            </div>
+          `;
+        } else {
+          participantsHTML = `
+            <div class="participants-section">
+              <strong>Participants:</strong>
+              <span class="no-participants">No participants yet</span>
+            </div>
+          `;
+        }
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          ${participantsHTML}
         `;
+
+        // Event-Handler für Delete-Buttons
+        setTimeout(() => {
+          const deleteBtns = activityCard.querySelectorAll('.delete-btn');
+          deleteBtns.forEach((btn) => {
+            btn.onclick = async () => {
+              const activity = btn.getAttribute('data-activity');
+              const email = btn.getAttribute('data-email');
+              const response = await fetch(`/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`, {
+                method: 'POST',
+              });
+              const result = await response.json();
+              if (response.ok && result.success) {
+                fetchActivities();
+              } else {
+                alert(result.detail || 'Teilnehmer konnte nicht entfernt werden.');
+              }
+            };
+          });
+        }, 0);
 
         activitiesList.appendChild(activityCard);
 
@@ -126,6 +172,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Aktivitäten und Teilnehmerliste direkt aktualisieren
+        fetchActivities();
         // Teilnehmerliste direkt aktualisieren
         // Hole aktuelle Aktivitäten und rendere nur Teilnehmer neu
         const activitiesResponse = await fetch("/activities");
