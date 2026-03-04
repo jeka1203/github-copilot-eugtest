@@ -1,8 +1,5 @@
-pytest
 fastapi
 httpx
-fastapi
+pymongo
 pytest
-httpx
-httpx
 uvicorn

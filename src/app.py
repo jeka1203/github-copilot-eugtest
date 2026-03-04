@@ -1,15 +1,19 @@
 """
-High School Management System API
-from fastapi import Request
-A super simple FastAPI application that allows students to view and sign up
+High School Management System API.
+
+A simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from copy import deepcopy
 import os
 from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -19,8 +23,7 @@ current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
 
-# In-memory activity database
-activities = {
+INITIAL_ACTIVITIES = {
     "Chess Club": {
         "description": "Learn strategies and compete in chess tournaments",
         "schedule": "Fridays, 3:30 PM - 5:00 PM",
@@ -78,6 +81,98 @@ activities = {
 }
 
 
+class ActivityStore:
+    def __init__(self):
+        self._mongo_available = False
+        self._memory_activities = deepcopy(INITIAL_ACTIVITIES)
+        self._collection = None
+
+        mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+        mongo_db_name = os.getenv("MONGODB_DB", "mergington_school")
+        mongo_collection_name = os.getenv("MONGODB_COLLECTION", "activities")
+
+        try:
+            client = MongoClient(mongo_uri, serverSelectionTimeoutMS=1500)
+            client.admin.command("ping")
+            self._collection = client[mongo_db_name][mongo_collection_name]
+            self._collection.create_index("name", unique=True)
+            self._seed_if_empty()
+            self._mongo_available = True
+        except PyMongoError:
+            self._mongo_available = False
+
+    def _seed_if_empty(self):
+        if self._collection is None:
+            return
+        if self._collection.count_documents({}) > 0:
+            return
+
+        documents = []
+        for name, data in INITIAL_ACTIVITIES.items():
+            document = {"name": name, **data}
+            documents.append(document)
+        self._collection.insert_many(documents)
+
+    def get_activities(self):
+        if not self._mongo_available:
+            return deepcopy(self._memory_activities)
+
+        activities = {}
+        for doc in self._collection.find({}, {"_id": 0}):
+            name = doc.pop("name")
+            activities[name] = doc
+        return activities
+
+    def signup(self, activity_name: str, email: str):
+        if not self._mongo_available:
+            if activity_name not in self._memory_activities:
+                raise HTTPException(status_code=404, detail="Activity not found")
+
+            activity = self._memory_activities[activity_name]
+            if email in activity["participants"]:
+                raise HTTPException(status_code=400, detail="Student already signed up for this activity")
+
+            activity["participants"].append(email)
+            return
+
+        activity = self._collection.find_one({"name": activity_name}, {"_id": 0, "participants": 1})
+        if activity is None:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        if email in activity.get("participants", []):
+            raise HTTPException(status_code=400, detail="Student already signed up for this activity")
+
+        self._collection.update_one(
+            {"name": activity_name},
+            {"$addToSet": {"participants": email}},
+        )
+
+    def unregister(self, activity_name: str, email: str):
+        if not self._mongo_available:
+            if activity_name not in self._memory_activities:
+                raise HTTPException(status_code=404, detail="Activity not found")
+            activity = self._memory_activities[activity_name]
+            if email in activity["participants"]:
+                activity["participants"].remove(email)
+                return True
+            return False
+
+        activity = self._collection.find_one({"name": activity_name}, {"_id": 0, "participants": 1})
+        if activity is None:
+            raise HTTPException(status_code=404, detail="Activity not found")
+
+        if email not in activity.get("participants", []):
+            return False
+
+        self._collection.update_one(
+            {"name": activity_name},
+            {"$pull": {"participants": email}},
+        )
+        return True
+
+
+store = ActivityStore()
+
+
 @app.get("/")
 def root():
     return RedirectResponse(url="/static/index.html")
@@ -85,35 +180,21 @@ def root():
 
 @app.get("/activities")
 def get_activities():
-    return activities
+    return store.get_activities()
 
 
 
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
     """Sign up a student for an activity"""
-    if activity_name not in activities:
-        raise HTTPException(status_code=404, detail="Activity not found")
-    activity = activities[activity_name]
-
-    # Validate student is not already signed up
-    if email in activity["participants"]:
-        raise HTTPException(status_code=400, detail="Student already signed up for this activity")
-
-    # Add student
-    activity["participants"].append(email)
-    if email not in activity["participants"]:
-        activity["participants"].append(email)
+    store.signup(activity_name, email)
     return {"message": f"Signed up {email} for {activity_name}"}
 
 
 # Teilnehmer aus Aktivität entfernen
 @app.post("/activities/{activity_name}/unregister")
 async def unregister_participant(activity_name: str, email: str):
-    if activity_name not in activities:
-        raise HTTPException(status_code=404, detail="Activity not found")
-    activity = activities[activity_name]
-    if email in activity["participants"]:
-        activity["participants"].remove(email)
+    removed = store.unregister(activity_name, email)
+    if removed:
         return {"success": True}
     return {"success": False, "detail": "Teilnehmer nicht gefunden."}
